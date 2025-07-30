@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outil de Dimensionnement Télécoms Avancé</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../static/styles.css">
+    <script src="../static/script.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TELECOM SIZING (Outil de Dimensionnement Télécoms)</h1>
+            <p>Conception et planification avancée des réseaux de télécommunications</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert {% if category == 'success' %}alert-success{% else %}alert-error{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="content">
+            <!-- Formulaire de saisie -->
+            <div class="form-section">
+                <h2>📊 Paramètres de Dimensionnement</h2>
+                <form method="POST" action="/calculate" onsubmit="return validateForm()">
+                    
+                    <!-- Configuration de base -->
+                    <div class="form-group">
+                        <label for="surface_total">Surface totale à couvrir (km²) *</label>
+                        <input type="number" id="surface_total" name="surface_total" step="0.01" min="0.01" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="technology">Technologie *</label>
+                            <select id="technology" name="technology" onchange="updateFrequencies()" required>
+                                <option value="">Sélectionnez une technologie</option>
+                                {% for tech_key, tech_info in technologies.items() %}
+                                <option value="{{ tech_key }}">{{ tech_info.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="frequency">Fréquence (MHz) *</label>
+                            <select id="frequency" name="frequency" required>
+                                <option value="">Sélectionnez d'abord une technologie</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="environment">Environnement *</label>
+                        <select id="environment" name="environment" required>
+                            <option value="">Sélectionnez un environnement</option>
+                            <option value="urban">Urbain</option>
+                            <option value="suburban">Suburbain</option>
+                            <option value="rural">Rural</option>
+                            <option value="free_space">Espace libre</option>
+                        </select>
+                    </div>
+
+                    <!-- Paramètres de trafic et qualité -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="traffic_demand">Demande de trafic (%) *</label>
+                            <input type="number" id="traffic_demand" name="traffic_demand" min="1" max="100" value="50" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="qos_requirements">Exigences QoS (%) *</label>
+                            <input type="number" id="qos_requirements" name="qos_requirements" min="50" max="100" value="80" required>
+                        </div>
+                    </div>
+
+                    <!-- Paramètres avancés d'antennes -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="hb">Hauteur antenne BTS (m)</label>
+                            <input type="number" id="hb" name="hb" min="10" max="200" value="30" step="1">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="hm">Hauteur antenne mobile (m)</label>
+                            <input type="number" id="hm" name="hm" min="1" max="10" value="1.5" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn">🔬 Calculer le Dimensionnement</button>
+                        <a href="/download_report" class="btn btn-secondary">📄 Télécharger Rapport</a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Résultats -->
+            <div class="form-section">
+                {% if results %}
+                <div class="results-section">
+                    <h2>📈 Résultats de Dimensionnement</h2>
+                    
+                    <!-- Informations sur la technologie -->
+                    <div class="tech-info">
+                        <h3>🔧 Configuration Technique</h3>
+                        <p><strong>Technologie:</strong> {{ results.technology }}</p>
+                        <p><strong>Fréquence:</strong> {{ results.frequency }} MHz</p>
+                        <p><strong>Environnement:</strong> {{ results.environment.title() }}</p>
+                    </div>
+
+                    <!-- Paramètres de cellule -->
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <div class="label">Rayon optimal</div>
+                            <div class="value">{{ "%.2f"|format(results.optimal_radius) }} km</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Rayon maximal</div>
+                            <div class="value">{{ "%.2f"|format(results.max_radius) }} km</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Surface cellule</div>
+                            <div class="value">{{ "%.2f"|format(results.cell_area) }} km²</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Nombre de cellules</div>
+                            <div class="value">{{ results.num_cells }}</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Taille cluster</div>
+                            <div class="value">{{ results.cluster_size }}</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Distance réutilisation</div>
+                            <div class="value">{{ "%.2f"|format(results.reuse_distance) }} km</div>
+                        </div>
+                    </div>
+
+                    <!-- Capacité et performance -->
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <div class="label">Capacité par cellule</div>
+                            <div class="value">{{ "%.0f"|format(results.capacity_per_cell) }}</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="label">Capacité totale</div>
+                            <div class="value">{{ "%.0f"|format(results.total_capacity) }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Score QoS -->
+                    <div class="result-item">
+                        <div class="label">Score QoS prévu
+                            {% if results.qos_score >= 90 %}
+                                <span class="qos-indicator qos-excellent">Excellent</span>
+                            {% elif results.qos_score >= 70 %}
+                                <span class="qos-indicator qos-good">Bon</span>
+                            {% else %}
+                                <span class="qos-indicator qos-poor">Faible</span>
+                            {% endif %}
+                        </div>
+                        <div class="value">{{ "%.1f"|format(results.qos_score) }}%</div>
+                    </div>
+
+                    <!-- Bilan de liaison -->
+                    <div class="link-budget {% if results.link_budget.link_feasible %}viable{% endif %}">
+                        <h3>📡 Bilan de Liaison</h3>
+                        <div class="budget-item">
+                            <span>Puissance émission:</span>
+                            <span>{{ results.link_budget.tx_power }} dBm</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Gain antenne TX:</span>
+                            <span>+{{ results.link_budget.tx_antenna_gain }} dBi</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Gain antenne RX:</span>
+                            <span>+{{ results.link_budget.rx_antenna_gain }} dBi</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Pertes propagation:</span>
+                            <span>-{{ "%.1f"|format(results.link_budget.path_loss) }} dB</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Marges totales:</span>
+                            <span>-{{ results.link_budget.fade_margin + results.link_budget.interference_margin + results.link_budget.body_loss }} dB</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Puissance reçue:</span>
+                            <span>{{ "%.1f"|format(results.link_budget.received_power) }} dBm</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Sensibilité récepteur:</span>
+                            <span>{{ results.link_budget.rx_sensitivity }} dBm</span>
+                        </div>
+                        <div class="budget-item">
+                            <span>Marge de liaison:</span>
+                            <span style="color: {% if results.link_budget.link_feasible %}green{% else %}red{% endif %}">
+                                {{ "%.1f"|format(results.link_budget.link_margin) }} dB
+                                {% if results.link_budget.link_feasible %}✓{% else %}✗{% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    </div>
+                {% else %}
+                <div class="results-section">
+                    <h2>📋 Instructions</h2>
+                    <p>🔹 Remplissez les paramètres de dimensionnement</p>
+                    <p>🔹 Sélectionnez la technologie appropriée (GSM, UMTS, LTE)</p>
+                    <p>🔹 Choisissez l'environnement de déploiement</p>
+                    <p>🔹 Définissez les exigences de trafic et de qualité</p>
+                    <p>🔹 Cliquez sur "Calculer" pour obtenir les résultats</p>
+                    
+                    <div class="tech-info">
+                        <h3>🎯 Fonctionnalités avancées:</h3>
+                        <ul>
+                            <li>Calculs de bilan de liaison complets</li>
+                            <li>Modèles de propagation Okumura-Hata</li>
+                            <li>Optimisation QoS et capacité</li>
+                            <li>Analyse économique détaillée</li>
+                            <li>Visualisations et rapports PDF</li>
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if pattern_url %}
+        <div class="full-width pattern-visualization">
+            <h2>📊 Visualisations</h2>
+            <img src="{{ pattern_url }}" alt="Motif de réutilisation et bilan de liaison">
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
